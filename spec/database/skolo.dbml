@@ -1,0 +1,724 @@
+Table users {
+  _id ObjectId [pk]
+  phone_number varchar(20) [unique, not null]
+  role_id ObjectId [not null, ref: > roles._id]
+  is_active boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  last_login timestamp
+  fcm_token varchar(255) [note: 'Firebase push token']
+
+  indexes {
+    phone_number
+    role_id
+  }
+}
+
+Table parents {
+  _id ObjectId [pk]
+  user_id ObjectId [unique, not null, ref: - users._id]
+  name varchar(100) [not null]
+  email varchar(100)
+  photo_url varchar(255)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    email
+  }
+}
+
+Table parent_addresses {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id]
+  address_line1 varchar(255) [not null]
+  address_line2 varchar(255)
+  city varchar(100) [not null]
+  state varchar(100) [not null]
+  pincode varchar(10)
+  latitude decimal(10,8) [not null]
+  longitude decimal(11,8) [not null]
+  is_primary boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    parent_id
+    (latitude, longitude)
+  }
+}
+
+Table drivers {
+  _id ObjectId [pk]
+  user_id ObjectId [unique, not null, ref: - users._id]
+  driver_unique_id varchar(20) [unique, not null, note: 'Parents use this ID to search/add driver']
+  name varchar(100) [not null]
+  email varchar(100)
+  photo_url varchar(255)
+  vehicle_type enum [not null, note: 'van, auto, bus']
+  vehicle_number varchar(20) [not null]
+  vehicle_capacity int [not null]
+  current_student_count int [default: 0, note: 'Active assigned students']
+  approval_status enum [default: 'pending', note: 'pending, approved, rejected']
+  approved_by ObjectId [ref: > admin_portal._id]
+  approved_at timestamp
+  rejection_reason text
+  is_available boolean [default: true]
+  rating decimal(3,2) [default: 0.00]
+  total_trips int [default: 0]
+  school_id ObjectId [ref: > schools._id, note: 'Set if driver is employed by a school']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    approval_status
+    vehicle_type
+    is_available
+    driver_unique_id
+  }
+}
+
+Table driver_addresses {
+  _id ObjectId [pk]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  address_line1 varchar(255) [not null]
+  address_line2 varchar(255)
+  city varchar(100) [not null]
+  state varchar(100) [not null]
+  pincode varchar(10)
+  latitude decimal(10,8) [not null]
+  longitude decimal(11,8) [not null]
+  is_primary boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    driver_id
+    (latitude, longitude)
+  }
+}
+
+Table driver_documents {
+  _id ObjectId [pk]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  driving_license_number varchar(50) [not null]
+  driving_license_photo_url varchar(255)
+  vehicle_license_number varchar(50) [not null]
+  vehicle_license_photo_url varchar(255)
+  insurance_number varchar(50)
+  insurance_photo_url varchar(255)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    driver_id
+  }
+}
+
+Table schools {
+  _id ObjectId [pk]
+  school_name varchar(200) [not null]
+  address varchar(255) [not null]
+  city varchar(100) [not null]
+  state varchar(100) [not null]
+  latitude decimal(10,8) [not null]
+  longitude decimal(11,8) [not null]
+  contact_number varchar(20)
+  email varchar(100)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    city
+    (latitude, longitude)
+  }
+}
+
+Table students {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id]
+  school_id ObjectId [not null, ref: > schools._id]
+  student_name varchar(100) [not null]
+  class varchar(20) [not null]
+  section varchar(10)
+  roll_number varchar(20)
+  photo_url varchar(255)
+  date_of_birth date
+  gender enum [note: 'male, female, other']
+  pickup_address_id ObjectId [not null, ref: > parent_addresses._id]
+  emergency_contact varchar(20)
+  medical_info text
+  is_active boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    parent_id
+    school_id
+    is_active
+  }
+}
+
+Table driver_student_assignments {
+  _id ObjectId [pk]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  student_id ObjectId [not null, ref: > students._id]
+  driver_unique_id varchar(20) [not null]
+  monthly_fee decimal(10,2)
+  assignment_status enum [default: 'pending', note: 'active, inactive, pending, parent_requested']
+  assigned_by_role_id ObjectId [not null, ref: > roles._id, note: 'parent, school, or admin role']
+  assigned_by_id ObjectId [not null, note: 'References parents._id, schools._id, or admin_portal._id based on assigned_by_role_id']
+  assigned_date date [not null]
+  start_date date
+  end_date date
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    driver_id
+    student_id
+    assignment_status
+    (driver_id, assignment_status)
+    driver_unique_id
+  }
+}
+
+Table trips {
+  _id ObjectId [pk]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  school_id ObjectId [not null, ref: > schools._id, note: 'Destination for pickup; start point for drop']
+  trip_type enum [not null, note: 'pickup, drop']
+  trip_date date [not null]
+  trip_status enum [default: 'scheduled', note: 'scheduled, started, in_progress, completed, cancelled']
+  start_time timestamp
+  end_time timestamp
+  total_distance decimal(10,2) [note: 'km']
+  optimized_route_data json [note: 'Calculated pickup/drop sequence based on lat/long']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    (driver_id, trip_date)
+    trip_status
+    trip_date
+    school_id
+  }
+}
+
+Table trip_students {
+  _id ObjectId [pk]
+  trip_id ObjectId [not null, ref: > trips._id]
+  student_id ObjectId [not null, ref: > students._id]
+  sequence_order int [note: 'Optimised pickup/drop order']
+  estimated_arrival_time time [note: 'Calculated ETA at this stop']
+  attendance_status enum [default: 'pending', note: 'present, absent, pending']
+  pickup_status enum [default: 'pending', note: 'pending, picked, dropped, no_show']
+  pickup_time timestamp
+  pickup_latitude decimal(10,8)
+  pickup_longitude decimal(11,8)
+  pickup_qr_code varchar(100)
+  pickup_otp varchar(6)
+  drop_time timestamp
+  drop_latitude decimal(10,8)
+  drop_longitude decimal(11,8)
+  drop_qr_code varchar(100)
+  drop_otp varchar(6)
+  notes text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    trip_id
+    student_id
+    (attendance_status, pickup_status)
+    (trip_id, sequence_order)
+  }
+}
+
+Table location_tracking {
+  _id ObjectId [pk]
+  trip_id ObjectId [not null, ref: > trips._id]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  latitude decimal(10,8) [not null]
+  longitude decimal(11,8) [not null]
+  speed decimal(5,2) [note: 'km/h']
+  heading decimal(5,2) [note: 'degrees']
+  accuracy decimal(6,2) [note: 'meters']
+  timestamp timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    trip_id
+    driver_id
+    timestamp
+  }
+}
+
+Table daily_qr_otp {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id, note: 'One OTP per parent per trip']
+  trip_id ObjectId [not null, ref: > trips._id]
+  qr_code varchar(255) [unique, not null]
+  otp_code varchar(6) [not null]
+  trip_type enum [not null, note: 'pickup, drop']
+  assigned_student_count int [not null, note: 'Immutable count set at creation; actual records in trip_attendance']
+  valid_from timestamp [not null]
+  valid_until timestamp [not null]
+  is_used boolean [default: false]
+  used_at timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (parent_id, trip_id)
+    qr_code
+    otp_code
+    valid_until
+  }
+}
+
+Table trip_attendance {
+  _id ObjectId [pk]
+  trip_id ObjectId [not null, ref: > trips._id]
+  daily_qr_otp_id ObjectId [not null, ref: > daily_qr_otp._id]
+  parent_id ObjectId [not null, ref: > parents._id]
+  student_id ObjectId [not null, ref: > students._id]
+  attendance_status enum [default: 'pending', note: 'pending, present, absent']
+  pickup_time timestamp
+  drop_time timestamp
+  otp_verified boolean [default: false]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    (trip_id, student_id) [unique]
+    trip_id
+    parent_id
+    student_id
+    attendance_status
+  }
+}
+
+Table notifications {
+  _id ObjectId [pk]
+  user_id ObjectId [not null, ref: > users._id]
+  notification_type enum [not null, note: 'pickup_started, approaching, picked_up, dropped, absent, trip_started, trip_completed, payment_due, general']
+  title varchar(200) [not null]
+  message text [not null]
+  data json [note: 'Extra payload, e.g. trip_id, student_id']
+  is_read boolean [default: false]
+  read_at timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (user_id, is_read)
+    created_at
+  }
+}
+
+Table device_tokens {
+  _id ObjectId [pk]
+  user_id ObjectId [not null, ref: > users._id]
+  role_id ObjectId [not null, ref: > roles._id]
+  fcm_token varchar(500) [not null]
+  device_type enum [not null, note: 'android, ios, web']
+  device_id varchar(255) [not null, note: 'Stable device identifier (Android ID / iOS identifierForVendor)']
+  is_active boolean [default: true, note: 'false on logout or invalid FCM token']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    (user_id, is_active)
+    fcm_token [unique]
+    (user_id, device_id)
+  }
+}
+
+Table notification_preferences {
+  _id ObjectId [pk]
+  user_id ObjectId [unique, not null, ref: > users._id]
+  push_enabled boolean [default: true]
+  updated_at timestamp
+
+  indexes {
+    user_id [unique]
+  }
+}
+
+Table subscription_plans {
+  _id ObjectId [pk]
+  plan_name varchar(100) [not null]
+  plan_type enum [not null, note: 'monthly, quarterly, yearly']
+  price decimal(10,2) [not null]
+  features json
+  is_active boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    is_active
+  }
+}
+
+Table parent_subscriptions {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id]
+  plan_id ObjectId [not null, ref: > subscription_plans._id]
+  start_date date [not null]
+  end_date date [not null]
+  subscription_status enum [not null, note: 'active, expired, cancelled']
+  auto_renew boolean [default: true]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    parent_id
+    subscription_status
+    end_date
+  }
+}
+
+Table school_subscriptions {
+  _id ObjectId [pk]
+  school_id ObjectId [not null, ref: > schools._id]
+  plan_id ObjectId [not null, ref: > subscription_plans._id]
+  start_date date [not null]
+  end_date date [not null]
+  subscription_status enum [not null, note: 'active, expired, cancelled, pending']
+  auto_renew boolean [default: false]
+  max_drivers int [note: 'Limit under this plan']
+  max_students int [note: 'Limit under this plan']
+  billing_contact varchar(100)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    school_id
+    subscription_status
+    end_date
+  }
+}
+
+Table school_student_codes {
+  _id ObjectId [pk]
+  code varchar(50) [unique, not null, note: 'Prefixed with SCHSTDCD']
+  school_subscription_id ObjectId [not null, ref: > school_subscriptions._id]
+  school_id ObjectId [not null, ref: > schools._id]
+  student_id ObjectId [not null, ref: > students._id]
+  plan_id ObjectId [not null, ref: > subscription_plans._id]
+  end_date date [not null]
+  is_redeemed boolean [default: false]
+  redeemed_by_parent_id ObjectId [ref: > parents._id]
+  redeemed_at timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    school_subscription_id
+    school_id
+    student_id
+    code
+    is_redeemed
+    (school_subscription_id, student_id)
+  }
+}
+
+Table payments {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id]
+  payment_type enum [not null, note: 'subscription, penalty']
+  amount decimal(10,2) [not null]
+  currency varchar(3) [default: 'INR']
+  payment_method enum [not null, note: 'card, upi, netbanking, wallet, cash']
+  payment_status enum [not null, note: 'pending, completed, failed, refunded']
+  transaction_id varchar(100) [note: 'Payment gateway txn ID']
+  gateway_response json [note: 'Raw gateway response payload']
+  subscription_id ObjectId [ref: > parent_subscriptions._id]
+  payment_date timestamp [default: `CURRENT_TIMESTAMP`]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    parent_id
+    payment_status
+    payment_date
+  }
+}
+
+Table ratings_reviews {
+  _id ObjectId [pk]
+  parent_id ObjectId [not null, ref: > parents._id]
+  driver_id ObjectId [not null, ref: > drivers._id]
+  trip_id ObjectId [ref: > trips._id]
+  rating int [not null, note: '1-5']
+  review_text text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    driver_id
+    rating
+  }
+}
+
+Table support_tickets {
+  _id ObjectId [pk]
+  user_id ObjectId [not null, ref: > users._id]
+  subject varchar(200) [not null]
+  description text [not null]
+  ticket_status enum [default: 'open', note: 'open, in_progress, resolved, closed']
+  priority enum [default: 'medium', note: 'low, medium, high, urgent']
+  assigned_to ObjectId [ref: > admin_portal._id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  resolved_at timestamp
+
+  indexes {
+    user_id
+    ticket_status
+    assigned_to
+    created_at
+  }
+}
+
+Table audit_logs {
+  _id ObjectId [pk]
+  actor_type enum [not null, note: 'user, admin']
+  actor_id ObjectId [not null, note: 'References users._id or admin_portal._id based on actor_type']
+  action_type varchar(50) [not null]
+  entity_type varchar(50) [not null]
+  entity_id ObjectId
+  old_values json
+  new_values json
+  ip_address varchar(45)
+  user_agent text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (actor_type, actor_id)
+    (entity_type, entity_id)
+    created_at
+  }
+}
+
+Table admin_portal {
+  _id ObjectId [pk]
+  username varchar(100) [unique, not null]
+  password_hash varchar(255) [not null]
+  email varchar(100) [unique, not null]
+  phone_number varchar(20)
+  role_id ObjectId [not null, ref: > roles._id]
+  school_id ObjectId [ref: > schools._id, note: 'Required for school_admin only']
+  is_active boolean [default: true]
+  last_login timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    username
+    email
+    role_id
+    school_id
+    is_active
+  }
+}
+
+Table ads {
+  _id ObjectId [pk]
+  title varchar(200) [not null]
+  description text
+  media_url varchar(500) [not null]
+  media_type enum [not null, note: 'image, video']
+  ad_type enum [not null, note: 'banner, interstitial, native_card']
+  target_audience enum [not null, default: 'all', note: 'all, parents, drivers, school_admin']
+  target_school_ids json [note: 'null = all schools']
+  click_action_type enum [note: 'url, in_app_screen, none']
+  click_url varchar(500)
+  advertiser_name varchar(200)
+  start_date date [not null]
+  end_date date [not null]
+  is_active boolean [default: true]
+  display_frequency int [default: 1, note: 'Max shown per user per day']
+  priority int [default: 0]
+  impression_count int [default: 0, note: 'Denormalized total']
+  click_count int [default: 0, note: 'Denormalized total']
+  created_by ObjectId [not null, ref: > admin_portal._id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    is_active
+    target_audience
+    (start_date, end_date)
+    priority
+  }
+}
+
+Table ad_interactions {
+  _id ObjectId [pk]
+  ad_id ObjectId [not null, ref: > ads._id]
+  user_id ObjectId [not null, ref: > users._id]
+  interaction_type enum [not null, note: 'impression, click, dismiss']
+  screen_context varchar(100)
+  timestamp timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    ad_id
+    user_id
+    (ad_id, user_id, timestamp)
+    interaction_type
+  }
+}
+
+Table school_events {
+  _id ObjectId [pk]
+  school_id ObjectId [not null, ref: > schools._id]
+  created_by ObjectId [not null, ref: > admin_portal._id]
+  event_title varchar(200) [not null]
+  event_description text
+  event_type enum [not null, note: 'sports, parent_meeting, cultural, holiday, festival, exam, excursion, general']
+  event_date date [not null]
+  end_date date [note: 'null = single day']
+  start_time varchar(10) [note: 'HH:MM']
+  end_time varchar(10) [note: 'HH:MM']
+  venue varchar(255)
+  audience_scope enum [not null, default: 'all', note: 'all, class_specific']
+  target_classes json [note: 'e.g. ["10A","10B"] when audience_scope=class_specific']
+  is_mandatory boolean [default: false]
+  requires_rsvp boolean [default: false]
+  rsvp_deadline date
+  attachment_urls json
+  is_cancelled boolean [default: false]
+  cancellation_reason text
+  notification_sent boolean [default: false]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    school_id
+    event_type
+    event_date
+    (school_id, event_date)
+    audience_scope
+    is_cancelled
+  }
+}
+
+Table event_rsvp {
+  _id ObjectId [pk]
+  event_id ObjectId [not null, ref: > school_events._id]
+  parent_id ObjectId [not null, ref: > parents._id]
+  student_id ObjectId [not null, ref: > students._id]
+  rsvp_status enum [not null, note: 'attending, not_attending, maybe']
+  notes text
+  responded_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    event_id
+    parent_id
+    (event_id, parent_id, student_id)
+    rsvp_status
+  }
+}
+
+Table school_parent_community {
+  _id ObjectId [pk]
+  school_id ObjectId [not null, ref: > schools._id]
+  parent_id ObjectId [not null, ref: > parents._id]
+  is_active boolean [default: true, note: 'false when parent has no active student in school']
+  notification_preferences json [note: '{ posts: bool, events: bool, announcements: bool }']
+  joined_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    school_id
+    parent_id
+    (school_id, parent_id)
+    is_active
+  }
+}
+
+Table parent_connections {
+  _id ObjectId [pk]
+  requester_id ObjectId [not null, ref: > parents._id]
+  recipient_id ObjectId [not null, ref: > parents._id]
+  school_id ObjectId [not null, ref: > schools._id]
+  connection_status enum [not null, default: 'pending', note: 'pending, accepted, rejected, blocked']
+  connected_at timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    requester_id
+    recipient_id
+    (requester_id, recipient_id)
+    school_id
+    connection_status
+  }
+}
+
+Table community_posts {
+  _id ObjectId [pk]
+  school_id ObjectId [not null, ref: > schools._id]
+  author_parent_id ObjectId [not null, ref: > parents._id]
+  post_content text [not null]
+  media_urls json
+  post_type enum [not null, default: 'general', note: 'general, question, alert, recommendation']
+  is_anonymous boolean [default: false, note: 'Hides author from other parents; admin can still see']
+  is_pinned boolean [default: false]
+  pinned_by ObjectId [ref: > admin_portal._id]
+  is_visible boolean [default: true]
+  moderated_by ObjectId [ref: > admin_portal._id]
+  moderation_reason text
+  reaction_count int [default: 0, note: 'Denormalized; kept in sync on reaction insert/delete']
+  comment_count int [default: 0, note: 'Denormalized; kept in sync on comment insert/delete']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    school_id
+    author_parent_id
+    post_type
+    (school_id, is_visible, created_at)
+    is_pinned
+  }
+}
+
+Table community_post_reactions {
+  _id ObjectId [pk]
+  post_id ObjectId [not null, ref: > community_posts._id]
+  parent_id ObjectId [not null, ref: > parents._id]
+  reaction_type enum [not null, note: 'like, helpful, heart, support']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    post_id
+    parent_id
+    (post_id, parent_id)
+  }
+}
+
+Table community_post_comments {
+  _id ObjectId [pk]
+  post_id ObjectId [not null, ref: > community_posts._id]
+  parent_id ObjectId [not null, ref: > parents._id]
+  comment_text text [not null]
+  is_anonymous boolean [default: false]
+  is_visible boolean [default: true]
+  moderated_by ObjectId [ref: > admin_portal._id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+
+  indexes {
+    post_id
+    parent_id
+    (post_id, is_visible, created_at)
+  }
+}
+
+Table roles {
+  _id ObjectId [pk]
+  role_name varchar(50) [unique, not null, note: 'parent, driver, superadmin, admin, support']
+  description text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+}
+
